@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Morris Radio - Pure Visual Edition</title>
+  <style>
+    :root { --accent: #00ff88; --bg: #050505; --panel: #111111; }
+    * { box-sizing: border-box; }
+    html, body { 
+      margin: 0; padding: 0; width: 100%; height: 100%; 
+      background: var(--bg); color: #fff; overflow: hidden;
+      font-family: 'Pretendard', sans-serif;
+    }
+    body { display: flex; justify-content: center; align-items: center; }
+
+    .app { 
+      width: 95vw; height: 90vh; max-width: 1000px;
+      display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+    }
+    .panel { 
+      background: var(--panel); border-radius: 24px; 
+      border: 1px solid rgba(255,255,255,0.05); overflow: hidden; 
+      display: flex; flex-direction: column; 
+    }
+    .sidebar { padding: 25px; }
+    .list { 
+      flex: 1; display: flex; flex-direction: column; gap: 10px; margin-top: 20px;
+      overflow-y: auto;
+    }
+    .list::-webkit-scrollbar { width: 0; } /* 스크롤바 숨김 */
+    
+    .item { 
+      background: #1a1a1a; border: 1px solid transparent; color: #888; padding: 15px; 
+      border-radius: 16px; text-align: left; cursor: pointer; transition: 0.3s;
+    }
+    .item:hover { background: #222; color: #fff; }
+    .item.active { background: #222; border-color: var(--accent); color: var(--accent); font-weight: bold; }
+    
+    .main { padding: 40px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+    
+    #visualizer {
+      width: 100%; height: 200px; margin: 20px 0;
+    }
+
+    .tag { font-size: 11px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; }
+    .info-box { text-align: center; width: 100%; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+<div class="app">
+  <aside class="panel sidebar">
+    <h2 style="margin:0; letter-spacing: -1px;">Morris Radio</h2>
+    <div class="list" id="stationList"></div>
+  </aside>
+
+  <main class="panel main">
+    <div class="info-box">
+      <div class="tag" id="tag">Select a Station</div>
+      <h1 id="curTitle" style="font-size: 42px; margin: 0; letter-spacing: -1px;">준비 완료</h1>
+      <p id="curDesc" style="color: #666; margin-top: 10px;">채널을 클릭하면 바로 재생됩니다.</p>
+    </div>
+
+    <canvas id="visualizer"></canvas>
+  </main>
+</div>
+
+<script>
+  // Jazz 채널을 새로운 안정적인 채널로 교체
+  const stations = [
+    { name: "EBS FM (교육/음악)", tag: "KR • EDU", url: "https://ebsonair.ebs.co.kr/fmradiofamilypc/familypc1m/playlist.m3u8" },
+    { name: "YTN 뉴스FM", tag: "KR • NEWS", url: "https://radiolive.ytn.co.kr/radio/_definst_/20211118_fmlive/playlist.m3u8" },
+    { name: "TBS 교통방송", tag: "KR • SEOUL", url: "https://cdnfm.tbs.seoul.kr/tbs/_definst_/tbs_fm_web_360.smil/playlist.m3u8" },
+    { name: "Classic FM (UK)", tag: "GLOBAL • CLASSIC", url: "https://media-ice.musicradio.com/ClassicFMMP3" },
+    { name: "Jazz Piano Trio", tag: "JAZZ • PIANO", url: "https://ice6.streaming.net/triojazz" }, // 신규 Jazz 채널
+    { name: "Smooth Jazz 24/7", tag: "JAZZ • SMOOTH", url: "https://smoothjazz.com.pl/listen.pls" || "https://ice3.somafm.com/specials-128-mp3" }, // 대체 Jazz 채널
+    { name: "SomaFM Groove", tag: "CHILL • LOFI", url: "https://ice1.somafm.com/groovesalad-128-mp3" }
+  ];
+
+  const audio = new Audio();
+  audio.crossOrigin = "anonymous";
+  audio.volume = 0.8; // 기본 볼륨 고정
+  const hls = new Hls();
+  const stationList = document.getElementById('stationList');
+  const canvas = document.getElementById('visualizer');
+  const ctx = canvas.getContext('2d');
+
+  let audioCtx, analyser, source, dataArray;
+
+  function init() {
+    stations.forEach((s) => {
+      const btn = document.createElement('button');
+      btn.className = 'item';
+      btn.innerHTML = `<strong>${s.name}</strong><br><small style="font-size:10px; opacity:0.6;">${s.tag}</small>`;
+      btn.onclick = () => loadStation(s, btn);
+      stationList.appendChild(btn);
+    });
+  }
+
+  function loadStation(s, el) {
+    document.querySelectorAll('.item').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('curTitle').textContent = s.name;
+    document.getElementById('tag').textContent = s.tag;
+    document.getElementById('curDesc').textContent = "실시간 스트리밍 중...";
+
+    if (s.url.includes('m3u8')) {
+      if (Hls.isSupported()) {
+        hls.loadSource(s.url);
+        hls.attachMedia(audio);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => audio.play());
+      }
+    } else {
+      hls.detachMedia();
+      audio.src = s.url;
+      audio.load();
+      audio.play().catch(e => console.log("Playback failed: ", e));
+    }
+    setupVisualizer();
+  }
+
+  function setupVisualizer() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      source = audioCtx.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      analyser.fftSize = 128;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      draw();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  function draw() {
+    requestAnimationFrame(draw);
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const barWidth = (canvas.width / dataArray.length) * 2;
+    let x = 0;
+
+    for (let i = 0; i < dataArray.length; i++) {
+      const barHeight = dataArray[i] / 1.5;
+      ctx.fillStyle = i % 2 === 0 ? '#00ff88' : '#00e5ff';
+      ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+      x += barWidth;
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
