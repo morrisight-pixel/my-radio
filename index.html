@@ -2,86 +2,105 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Morris Radio - Pure Visual Edition</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Morris Radio - Mobile Responsive</title>
   <style>
     :root { --accent: #00ff88; --bg: #050505; --panel: #111111; }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    
     html, body { 
       margin: 0; padding: 0; width: 100%; height: 100%; 
       background: var(--bg); color: #fff; overflow: hidden;
-      font-family: 'Pretendard', sans-serif;
+      font-family: 'Pretendard', -apple-system, sans-serif;
     }
-    body { display: flex; justify-content: center; align-items: center; }
 
+    /* 모바일 대응 컨테이너 */
     .app { 
-      width: 95vw; height: 90vh; max-width: 1000px;
-      display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column; /* 모바일 우선: 세로 배치 */
+      padding: 10px; gap: 10px;
     }
+
     .panel { 
-      background: var(--panel); border-radius: 24px; 
+      background: var(--panel); border-radius: 20px; 
       border: 1px solid rgba(255,255,255,0.05); overflow: hidden; 
       display: flex; flex-direction: column; 
     }
-    .sidebar { padding: 25px; }
-    .list { 
-      flex: 1; display: flex; flex-direction: column; gap: 10px; margin-top: 20px;
-      overflow-y: auto;
+
+    /* 상단 비주얼 영역 */
+    .main { 
+      flex: 0 0 45%; /* 화면의 45% 고정 */
+      padding: 20px; text-align: center;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
-    .list::-webkit-scrollbar { width: 0; } /* 스크롤바 숨김 */
+    
+    #visualizer { width: 100%; height: 120px; margin-top: 10px; }
+
+    /* 하단 리스트 영역 */
+    .sidebar { 
+      flex: 1; /* 남은 공간 모두 사용 */
+      padding: 15px; min-height: 0; 
+    }
+    
+    .list { 
+      flex: 1; display: flex; flex-direction: column; gap: 8px;
+      overflow-y: auto; /* 리스트만 스크롤 가능 */
+      -webkit-overflow-scrolling: touch;
+    }
+    .list::-webkit-scrollbar { width: 0; }
     
     .item { 
-      background: #1a1a1a; border: 1px solid transparent; color: #888; padding: 15px; 
-      border-radius: 16px; text-align: left; cursor: pointer; transition: 0.3s;
+      background: #1a1a1a; border: 1px solid transparent; color: #888; 
+      padding: 14px; border-radius: 12px; text-align: left; 
+      cursor: pointer; transition: 0.2s; flex-shrink: 0;
     }
-    .item:hover { background: #222; color: #fff; }
     .item.active { background: #222; border-color: var(--accent); color: var(--accent); font-weight: bold; }
     
-    .main { padding: 40px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
-    
-    #visualizer {
-      width: 100%; height: 200px; margin: 20px 0;
-    }
+    .tag { font-size: 10px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; margin-bottom: 5px; }
+    h1 { font-size: 24px; margin: 0; letter-spacing: -1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+    #curDesc { font-size: 13px; color: #666; margin: 5px 0 0 0; }
 
-    .tag { font-size: 11px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; }
-    .info-box { text-align: center; width: 100%; }
+    /* PC/태블릿 가로 모드 대응 */
+    @media (min-width: 768px) {
+      .app { flex-direction: row; padding: 20px; gap: 20px; }
+      .sidebar { flex: 0 0 300px; }
+      .main { flex: 1; height: 100%; }
+      h1 { font-size: 42px; }
+      #visualizer { height: 200px; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
 
 <div class="app">
-  <aside class="panel sidebar">
-    <h2 style="margin:0; letter-spacing: -1px;">Morris Radio</h2>
-    <div class="list" id="stationList"></div>
-  </aside>
-
   <main class="panel main">
-    <div class="info-box">
-      <div class="tag" id="tag">Select a Station</div>
-      <h1 id="curTitle" style="font-size: 42px; margin: 0; letter-spacing: -1px;">준비 완료</h1>
-      <p id="curDesc" style="color: #666; margin-top: 10px;">채널을 클릭하면 바로 재생됩니다.</p>
-    </div>
-
+    <div class="tag" id="tag">Select a Station</div>
+    <h1 id="curTitle">준비 완료</h1>
+    <p id="curDesc">채널을 클릭하면 재생됩니다.</p>
     <canvas id="visualizer"></canvas>
   </main>
+
+  <aside class="panel sidebar">
+    <div class="list" id="stationList"></div>
+  </aside>
 </div>
 
 <script>
-  // Jazz 채널을 새로운 안정적인 채널로 교체
+  // 기존 index.html의 스테이션 리스트 유지
   const stations = [
     { name: "EBS FM (교육/음악)", tag: "KR • EDU", url: "https://ebsonair.ebs.co.kr/fmradiofamilypc/familypc1m/playlist.m3u8" },
     { name: "YTN 뉴스FM", tag: "KR • NEWS", url: "https://radiolive.ytn.co.kr/radio/_definst_/20211118_fmlive/playlist.m3u8" },
     { name: "TBS 교통방송", tag: "KR • SEOUL", url: "https://cdnfm.tbs.seoul.kr/tbs/_definst_/tbs_fm_web_360.smil/playlist.m3u8" },
     { name: "Classic FM (UK)", tag: "GLOBAL • CLASSIC", url: "https://media-ice.musicradio.com/ClassicFMMP3" },
-    { name: "Jazz Piano Trio", tag: "JAZZ • PIANO", url: "https://ice6.streaming.net/triojazz" }, // 신규 Jazz 채널
-    { name: "Smooth Jazz 24/7", tag: "JAZZ • SMOOTH", url: "https://smoothjazz.com.pl/listen.pls" || "https://ice3.somafm.com/specials-128-mp3" }, // 대체 Jazz 채널
+    { name: "Jazz Piano Trio", tag: "JAZZ • PIANO", url: "https://ice6.streaming.net/triojazz" },
+    { name: "Smooth Jazz 24/7", tag: "JAZZ • SMOOTH", url: "https://smoothjazz.com.pl/listen.pls" || "https://ice3.somafm.com/specials-128-mp3" },
     { name: "SomaFM Groove", tag: "CHILL • LOFI", url: "https://ice1.somafm.com/groovesalad-128-mp3" }
   ];
 
   const audio = new Audio();
   audio.crossOrigin = "anonymous";
-  audio.volume = 0.8; // 기본 볼륨 고정
+  audio.volume = 0.8;
   const hls = new Hls();
   const stationList = document.getElementById('stationList');
   const canvas = document.getElementById('visualizer');
@@ -128,26 +147,22 @@
       source = audioCtx.createMediaElementSource(audio);
       source.connect(analyser);
       analyser.connect(audioCtx.destination);
-      analyser.fftSize = 128;
+      analyser.fftSize = 64; // 모바일 부하 감소를 위해 크기 조정
       dataArray = new Uint8Array(analyser.frequencyBinCount);
       draw();
     }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
   }
 
   function draw() {
     requestAnimationFrame(draw);
     if (!analyser) return;
     analyser.getByteFrequencyData(dataArray);
-    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const barWidth = (canvas.width / dataArray.length) * 2;
     let x = 0;
-
     for (let i = 0; i < dataArray.length; i++) {
-      const barHeight = dataArray[i] / 1.5;
+      const barHeight = dataArray[i] / 2;
       ctx.fillStyle = i % 2 === 0 ? '#00ff88' : '#00e5ff';
       ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
       x += barWidth;
